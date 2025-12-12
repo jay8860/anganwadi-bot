@@ -206,6 +206,48 @@ async def send_weekly_quiz(context: ContextTypes.DEFAULT_TYPE):
             is_anonymous=False
         )
 
+async def manual_quiz_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    q_data = random.choice(quiz_data.QUIZ_QUESTIONS)
+    
+    await context.bot.send_poll(
+        chat_id=chat_id,
+        question=f"🧠 *पोषण मास्टर क्विज़* 🧠\n\n{q_data['question']}",
+        options=q_data['options'],
+        type='quiz',
+        correct_option_id=q_data['correct_option_id'],
+        explanation=q_data['explanation'],
+        is_anonymous=False
+    )
+
+async def manual_poll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    
+    # 1. Egg Poll
+    await context.bot.send_poll(
+        chat_id=chat_id, 
+        question="क्या आज बच्चों को खाने में अंडे दिए गए? 🥚", 
+        options=["हाँ", "नहीं", "आंगनवाड़ी में अंडे उपलब्ध नहीं"], 
+        is_anonymous=False
+    )
+    
+    # 2. Stock Poll
+    await context.bot.send_poll(
+        chat_id=chat_id,
+        question="📦 स्टॉक चेक: आंगनवाड़ी में आज कौन सा सामान खत्म है? (जो नहीं है उसे चुनें)",
+        options=[
+            "✅ सब उपलब्ध है (All Good)",
+            "🍚 चावल (Rice)",
+            "🥘 दाल (Dal)",
+            "🛢️ तेल (Oil)",
+            "🥚 अंडे (Eggs)",
+            "📦 THR (Dry Ration)",
+            "🧂 नमक/मसाले"
+        ],
+        is_anonymous=False,
+        allows_multiple_answers=True
+    )
+
 async def manual_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
@@ -247,6 +289,8 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("report", manual_report_handler))
     application.add_handler(CommandHandler("stock", stock_alert_handler))
+    application.add_handler(CommandHandler("poll", manual_poll_handler))
+    application.add_handler(CommandHandler("quiz", manual_quiz_handler))
     # Handles photos
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     # Update group ID on any text message too
