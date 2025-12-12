@@ -13,8 +13,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy requirements and install dependencies
+# Copy requirements
 COPY requirements.txt .
+
+# Install CPU-only Torch (Lighter, <200MB instead of 800MB+)
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Install other dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
