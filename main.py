@@ -1,0 +1,130 @@
+import logging
+import pytz
+import os
+import asyncio
+from datetime import time
+import database
+import reports
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+# Setup logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+# Global variable to store the group chat ID
+# In a production app, this should be stored in the database
+GROUP_CHAT_ID = None
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("नमस्ते! मैं आंगनवाड़ी बॉट हूँ। कृपया अपनी गतिविधि की फोटो भेजें।")
+
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global GROUP_CHAT_ID
+    user = update.message.from_user
+    chat_id = update.effective_chat.id
+    
+    # Store group ID if this is a group
+    if update.effective_chat.type in ['group', 'supergroup']:
+        GROUP_CHAT_ID = chat_id
+        
+    full_name = user.full_name
+    
+    # Register/Update user
+    database.add_user_if_not_exists(user.id, full_name)
+    
+    # Log submission
+    status, streak = database.log_submission(user.id)
+    
+    # Reply logic
+    if status == 'new_submission':
+        msg = f"नमस्ते {full_name}, आपकी फोटो मिल गई है! ✅\nशानदार काम! आपकी स्ट्रीक: {streak} 🔥"
+        await update.message.reply_text(msg, reply_to_message_id=update.message.id)
+    elif status == 'already_submitted':
+        await update.message.reply_text(f"{full_name}, आपने आज की फोटो पहले ही भेज दी है। धन्यवाद! 🙏", reply_to_message_id=update.message.id)
+
+# Scheduled Jobs
+async def report_2pm(context: ContextTypes.DEFAULT_TYPE):
+    if GROUP_CHAT_ID:
+        count = database.get_submitted_today_count()
+        msg = f"📊 *दोपहर 2 बजे की रिपोर्ट*\n\nआज अभी तक {count} सदस्यों ने अपनी गतिविधि की फोटो भेजी है।\nकृपया बाकी सदस्य भी जल्दी फोटो भेजें!"
+        await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg, parse_mode='Markdown')
+
+async def report_6pm(context: ContextTypes.DEFAULT_TYPE):
+    if GROUP_CHAT_ID:
+        # 1. Stats
+        count = database.get_submitted_today_count()
+        
+        # 2. Performance & Awards
+        awards_msg = reports.get_performance_report_text()
+        
+        full_msg = f"🌇 *शाम 6 बजे की फाइनल रिपोर्ट*\n\nआज कुल {count} सदस्यों ने फोटो भेजी।\n\n{awards_msg}"
+        
+        await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=full_msg, parse_mode='Markdown')
+        
+        # 3. Missing Report Excel
+        file_path = reports.generate_missing_workers_excel()
+        if file_path:
+            await context.bot.send_document(
+                chat_id=GROUP_CHAT_ID, 
+                document=open(file_path, 'rb'),
+                caption="📄 उन सदस्यों की सूची जिन्होंने आज फोटो नहीं भेजी।"
+            )
+            # Cleanup
+            try:
+                os.remove(file_path)
+            except:
+                pass
+
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Admin debug command or for manual trigger
+    count = database.get_submitted_today_count()
+    await update.message.reply_text(f"आज के सबमिशन: {count}")
+
+def main():
+    if not TOKEN:
+        print("Error: TELEGRAM_BOT_TOKEN not found in .env file")
+        return
+
+    # Initialize DB
+    database.init_db()
+    
+    application = ApplicationBuilder().token(TOKEN).build()
+    
+    # Handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("stats", stats_command))
+    # Handles photos
+    application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+    # Update group ID on any text message too
+    async def update_group_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        global GROUP_CHAT_ID
+        if update.effective_chat.type in ['group', 'supergroup']:
+            GROUP_CHAT_ID = update.effective_chat.id
+            
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), update_group_id))
+
+    # Job Queue
+    job_queue = application.job_queue
+    
+    # Timezone: IST (Asia/Kolkata)
+    tz = pytz.timezone('Asia/Kolkata')
+    
+    # 2:00 PM IST
+    job_queue.run_daily(report_2pm, time(hour=14, minute=0, tzinfo=tz)) 
+    # 6:00 PM IST
+    job_queue.run_daily(report_6pm, time(hour=18, minute=0, tzinfo=tz))
+
+    print("Bot is running...")
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
