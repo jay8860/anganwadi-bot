@@ -119,10 +119,32 @@ async def report_6pm(context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
 
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Admin debug command or for manual trigger
+async def manual_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    
+    # 1. Stats
     count = database.get_submitted_today_count()
-    await update.message.reply_text(f"आज के सबमिशन: {count}")
+    
+    # 2. Performance & Awards
+    awards_msg = reports.get_performance_report_text()
+    
+    full_msg = f"📊 *मैनुअल रिपोर्ट (अभी तक)*\n\nआज कुल {count} सदस्यों ने फोटो भेजी।\n\n{awards_msg}"
+    
+    await context.bot.send_message(chat_id=chat_id, text=full_msg, parse_mode='Markdown')
+    
+    # 3. Missing Report Excel
+    file_path = reports.generate_missing_workers_excel()
+    if file_path:
+        await context.bot.send_document(
+            chat_id=chat_id, 
+            document=open(file_path, 'rb'),
+            caption="📄 उन सदस्यों की सूची जिन्होंने आज फोटो नहीं भेजी।"
+        )
+        # Cleanup
+        try:
+            os.remove(file_path)
+        except:
+            pass
 
 def main():
     if not TOKEN:
@@ -136,7 +158,7 @@ def main():
     
     # Handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("report", manual_report_handler))
     # Handles photos
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     # Update group ID on any text message too
