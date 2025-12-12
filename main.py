@@ -109,6 +109,26 @@ async def send_egg_poll(context: ContextTypes.DEFAULT_TYPE):
             is_anonymous=False
         )
 
+async def send_stock_poll(context: ContextTypes.DEFAULT_TYPE):
+    if GROUP_CHAT_ID:
+        question = "📦 स्टॉक चेक: आंगनवाड़ी में आज कौन सा सामान खत्म है? (जो नहीं है उसे चुनें)"
+        options = [
+            "✅ सब उपलब्ध है (All Good)",
+            "🍚 चावल (Rice)",
+            "🥘 दाल (Dal)",
+            "🛢️ तेल (Oil)",
+            "🥚 अंडे (Eggs)",
+            "📦 THR (Dry Ration)",
+            "🧂 नमक/मसाले"
+        ]
+        await context.bot.send_poll(
+            chat_id=GROUP_CHAT_ID,
+            question=question,
+            options=options,
+            is_anonymous=False,
+            allows_multiple_answers=True
+        )
+
 async def report_2pm(context: ContextTypes.DEFAULT_TYPE):
     if GROUP_CHAT_ID:
         count = database.get_submitted_today_count()
@@ -255,6 +275,9 @@ def main():
     
     # 3:00 PM IST - Egg Poll
     job_queue.run_daily(send_egg_poll, time(hour=15, minute=0, tzinfo=tz))
+
+    # 3:00 PM IST - Stock Poll
+    job_queue.run_daily(send_stock_poll, time(hour=15, minute=0, tzinfo=tz))
     
     # 6:00 PM IST - Final Report
     job_queue.run_daily(report_6pm, time(hour=18, minute=0, tzinfo=tz))
