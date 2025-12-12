@@ -9,6 +9,8 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 from dotenv import load_dotenv
 from ultralytics import YOLO
+import random
+import messages
 
 # Load environment variables
 load_dotenv()
@@ -87,6 +89,11 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"{full_name}, आपने आज की फोटो पहले ही भेज दी है। धन्यवाद! 🙏", reply_to_message_id=update.message.id)
 
 # Scheduled Jobs
+async def send_morning_motivation(context: ContextTypes.DEFAULT_TYPE):
+    if GROUP_CHAT_ID:
+        quote = random.choice(messages.MOTIVATIONAL_QUOTES)
+        await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=quote, parse_mode='Markdown')
+
 async def report_2pm(context: ContextTypes.DEFAULT_TYPE):
     if GROUP_CHAT_ID:
         count = database.get_submitted_today_count()
@@ -179,6 +186,8 @@ def main():
     job_queue.run_daily(report_2pm, time(hour=14, minute=0, tzinfo=tz)) 
     # 6:00 PM IST
     job_queue.run_daily(report_6pm, time(hour=18, minute=0, tzinfo=tz))
+    # 8:00 AM IST - Daily Motivation
+    job_queue.run_daily(send_morning_motivation, time(hour=8, minute=0, tzinfo=tz))
 
     print("Bot is running...")
     application.run_polling()
