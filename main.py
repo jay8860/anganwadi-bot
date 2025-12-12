@@ -92,7 +92,11 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_morning_motivation(context: ContextTypes.DEFAULT_TYPE):
     if GROUP_CHAT_ID:
         quote = random.choice(messages.MOTIVATIONAL_QUOTES)
-        await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=quote, parse_mode='Markdown')
+        activity = random.choice(messages.PRESCHOOL_ACTIVITIES)
+        
+        full_msg = f"{quote}\n\n{activity}"
+        
+        await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=full_msg, parse_mode='Markdown')
 
 async def send_egg_poll(context: ContextTypes.DEFAULT_TYPE):
     if GROUP_CHAT_ID:
@@ -136,6 +140,51 @@ async def report_6pm(context: ContextTypes.DEFAULT_TYPE):
                 os.remove(file_path)
             except:
                 pass
+import quiz_data
+
+# ... existing code ...
+
+async def stock_alert_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("उपयोग: /stock [सामान] [स्थिति]\nउदाहरण: /stock चावल खत्म")
+        return
+        
+    item = " ".join(context.args)
+    user = update.message.from_user.full_name
+    
+    alert_msg = f"⚠️ *STOCK ALERT* ⚠️\n\n📢 *{user}* ने रिपोर्ट किया:\n🛑 *{item}*\n\nकृपया व्यवस्थापक (Admin) ध्यान दें!"
+    
+    # Send to group (and pin it if needed)
+    msg = await update.message.reply_text(alert_msg, parse_mode='Markdown')
+    try:
+        await msg.pin()
+    except:
+        pass
+
+async def send_vhsnd_reminder(context: ContextTypes.DEFAULT_TYPE):
+    if GROUP_CHAT_ID:
+        msg = (
+            "💉 *कल टीकाकरण दिवस (VHSND) है!* 💉\n\n"
+            "✅ क्या आपने आशा (ASHA) दीदी को सूचित कर दिया?\n"
+            "✅ क्या वैक्सीन और रिकॉर्ड रजिस्टर तैयार हैं?\n\n"
+            "कल सभी लाभार्थियों को समय पर बुलाएं।"
+        )
+        await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg, parse_mode='Markdown')
+
+async def send_weekly_quiz(context: ContextTypes.DEFAULT_TYPE):
+    if GROUP_CHAT_ID:
+        # Pick one random question
+        q_data = random.choice(quiz_data.QUIZ_QUESTIONS)
+        
+        await context.bot.send_poll(
+            chat_id=GROUP_CHAT_ID,
+            question=f"🧠 *पोषण मास्टर क्विज़* 🧠\n\n{q_data['question']}",
+            options=q_data['options'],
+            type='quiz',
+            correct_option_id=q_data['correct_option_id'],
+            explanation=q_data['explanation'],
+            is_anonymous=False
+        )
 
 async def manual_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -177,6 +226,7 @@ def main():
     # Handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("report", manual_report_handler))
+    application.add_handler(CommandHandler("stock", stock_alert_handler))
     # Handles photos
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     # Update group ID on any text message too
@@ -193,15 +243,26 @@ def main():
     # Timezone: IST (Asia/Kolkata)
     tz = pytz.timezone('Asia/Kolkata')
     
-    # 2:00 PM IST
-    job_queue.run_daily(report_2pm, time(hour=14, minute=0, tzinfo=tz)) 
-    # 3:00 PM IST - Egg Poll
-    job_queue.run_daily(send_egg_poll, time(hour=15, minute=0, tzinfo=tz))
-    # 6:00 PM IST
-    job_queue.run_daily(report_6pm, time(hour=18, minute=0, tzinfo=tz))
-    # 8:00 AM IST - Daily Motivation
+    # 8:00 AM IST - Daily Motivation + Activities
     job_queue.run_daily(send_morning_motivation, time(hour=8, minute=0, tzinfo=tz))
 
+    # 12:00 PM IST (Saturday Only) - Quiz
+    # days=(5,) means Saturday (Mon=0)
+    job_queue.run_daily(send_weekly_quiz, time(hour=12, minute=0, tzinfo=tz), days=(5,))
+
+    # 2:00 PM IST
+    job_queue.run_daily(report_2pm, time(hour=14, minute=0, tzinfo=tz)) 
+    
+    # 3:00 PM IST - Egg Poll
+    job_queue.run_daily(send_egg_poll, time(hour=15, minute=0, tzinfo=tz))
+    
+    # 6:00 PM IST - Final Report
+    job_queue.run_daily(report_6pm, time(hour=18, minute=0, tzinfo=tz))
+
+    # 6:00 PM IST (Tuesday Only) - VHSND Reminder
+    # days=(1,) means Tuesday
+    job_queue.run_daily(send_vhsnd_reminder, time(hour=18, minute=0, tzinfo=tz), days=(1,))
+    
     print("Bot is running...")
     application.run_polling()
 
