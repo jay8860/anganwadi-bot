@@ -8,6 +8,7 @@ import reports
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 from dotenv import load_dotenv
+from ultralytics import YOLO
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +28,10 @@ GROUP_CHAT_ID = None
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("नमस्ते! मैं आंगनवाड़ी बॉट हूँ। कृपया अपनी गतिविधि की फोटो भेजें।")
 
+# Load model (globally to cache it)
+# yolov8n.pt is small (6MB)
+model = YOLO('yolov8n.pt')
+
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global GROUP_CHAT_ID
     user = update.message.from_user
@@ -38,6 +43,28 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     full_name = user.full_name
     
+    # --- Person Detection Start ---
+    # Download photo
+    photo_file = await update.message.photo[-1].get_file()
+    file_path = f"temp_{user.id}.jpg"
+    await photo_file.download_to_drive(file_path)
+    
+    # Run Inference
+    # Run in thread to avoid blocking event loop
+    results = await asyncio.to_thread(model, file_path, verbose=False)
+    
+    # Count persons (class 0)
+    person_count = 0
+    for r in results:
+        for cls in r.boxes.cls:
+            if int(cls) == 0:
+                person_count += 1
+                
+    # Cleanup
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    # --- Person Detection End ---
+
     # Register/Update user
     database.add_user_if_not_exists(user.id, full_name)
     
@@ -47,7 +74,13 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Reply logic
     if status == 'new_submission':
         msg = f"नमस्ते {full_name}, आपकी फोटो मिल गई है! ✅\nशानदार काम! आपकी स्ट्रीक: {streak} 🔥"
-        await update.message.reply_text(msg, reply_to_message_id=update.message.id)
+        
+        # Warning if people < 5
+        if person_count < 5:
+            msg += f"\n\n⚠️ *चेतावनी*: फोटो में केवल {person_count} लोग दिखाई दे रहे हैं (कम से कम 5 होने चाहिए)।"
+            
+        await update.message.reply_text(msg, reply_to_message_id=update.message.id, parse_mode='Markdown')
+        
     elif status == 'already_submitted':
         await update.message.reply_text(f"{full_name}, आपने आज की फोटो पहले ही भेज दी है। धन्यवाद! 🙏", reply_to_message_id=update.message.id)
 

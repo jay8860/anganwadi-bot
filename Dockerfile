@@ -4,6 +4,13 @@ FROM python:3.10-slim
 ENV TZ=Asia/Kolkata
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
+# Install system dependencies for OpenCV/GLib
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+
 WORKDIR /app
 
 # Copy requirements and install dependencies
