@@ -30,7 +30,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 GROUP_CHAT_ID = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("नमस्ते! मैं आंगनवाड़ी बॉट हूँ। कृपया अपनी गतिविधि की फोटो भेजें।")
+    await update.message.reply_text("नमस्ते! मैं आंगनवाड़ी बॉट हूँ (v2.0)।\n✅ नई सुविधाएँ सक्रिय हैं।")
 
 # Load model (globally to cache it)
 # yolov8n.pt is small (6MB)
@@ -93,6 +93,17 @@ async def send_morning_motivation(context: ContextTypes.DEFAULT_TYPE):
     if GROUP_CHAT_ID:
         quote = random.choice(messages.MOTIVATIONAL_QUOTES)
         await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=quote, parse_mode='Markdown')
+
+async def send_egg_poll(context: ContextTypes.DEFAULT_TYPE):
+    if GROUP_CHAT_ID:
+        question = "क्या आज बच्चों को खाने में अंडे दिए गए? 🥚"
+        options = ["हाँ", "नहीं", "आंगनवाड़ी में अंडे उपलब्ध नहीं"]
+        await context.bot.send_poll(
+            chat_id=GROUP_CHAT_ID, 
+            question=question, 
+            options=options, 
+            is_anonymous=False
+        )
 
 async def report_2pm(context: ContextTypes.DEFAULT_TYPE):
     if GROUP_CHAT_ID:
@@ -184,6 +195,8 @@ def main():
     
     # 2:00 PM IST
     job_queue.run_daily(report_2pm, time(hour=14, minute=0, tzinfo=tz)) 
+    # 3:00 PM IST - Egg Poll
+    job_queue.run_daily(send_egg_poll, time(hour=15, minute=0, tzinfo=tz))
     # 6:00 PM IST
     job_queue.run_daily(report_6pm, time(hour=18, minute=0, tzinfo=tz))
     # 8:00 AM IST - Daily Motivation
