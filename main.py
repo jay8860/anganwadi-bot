@@ -20,6 +20,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+# Silence httpx (telegram polling) logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Global variable to store the group chat ID
 # In a production app, this should be stored in the database
