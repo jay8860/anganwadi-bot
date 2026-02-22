@@ -2,7 +2,13 @@ import sqlite3
 from datetime import datetime, date, timedelta
 import os
 
-DB_NAME = "anganwadi.db"
+# Use Railway Volume if it exists, otherwise use local file
+if os.path.exists('/app/data'):
+    DB_NAME = "/app/data/anganwadi.db"
+    # Ensure directory is writable/exists natively
+    os.makedirs('/app/data', exist_ok=True)
+else:
+    DB_NAME = "anganwadi.db"
 
 def get_connection():
     return sqlite3.connect(DB_NAME)
@@ -26,6 +32,7 @@ def init_db():
                     timestamp TEXT,
                     FOREIGN KEY(user_id) REFERENCES users(user_id)
                 )''')
+
     conn.commit()
     conn.close()
 
