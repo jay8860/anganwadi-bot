@@ -133,3 +133,15 @@ def get_top_streaks(limit=5):
     results = c.fetchall()
     conn.close()
     return results
+
+def get_submissions_between_dates(start_date_str, end_date_str):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT user_id, date(timestamp) 
+        FROM submissions 
+        WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    """, (start_date_str, end_date_str))
+    results = c.fetchall()
+    conn.close()
+    return results

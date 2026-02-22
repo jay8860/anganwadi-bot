@@ -2,7 +2,7 @@ import logging
 import pytz
 import os
 import asyncio
-from datetime import time
+from datetime import time, datetime, timedelta
 import database
 import reports
 from telegram import Update
@@ -30,7 +30,19 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 GROUP_CHAT_ID = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("नमस्ते! मैं आंगनवाड़ी बॉट हूँ (v2.0)।\n✅ नई सुविधाएँ सक्रिय हैं।")
+    msg = (
+        "नमस्ते! मैं आंगनवाड़ी बॉट हूँ (v2.0)।\n"
+        "✅ नई सुविधाएँ सक्रिय हैं।\n\n"
+        "**उपलब्ध कमांड्स (Commands):**\n"
+        "• `/report` - आज की रिपोर्ट और परफॉरमेंस\n"
+        "• `/weekly` - पिछले 7 दिनों की रिपोर्ट\n"
+        "• `/fortnightly` - 15 दिनों का अटेंडेंस रजिस्टर\n"
+        "• `/monthly` - 30 दिनों का अटेंडेंस रजिस्टर\n"
+        "• `/poll` - अंडा और राशन स्टॉक का पोल भेजें\n"
+        "• `/quiz` - नया क्विज़ सवाल भेजें\n"
+        "• `/stock [सामान]` - स्टॉकAlert भेजें"
+    )
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
 # Load model (globally to cache it)
 # yolov8n.pt is small (6MB)
@@ -275,6 +287,49 @@ async def manual_report_handler(update: Update, context: ContextTypes.DEFAULT_TY
         except:
             pass
 
+async def weekly_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    stats_msg = reports.get_past_week_stats()
+    await update.message.reply_text(stats_msg, parse_mode='Markdown')
+
+async def fortnightly_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    today = datetime.now().date()
+    start_date = today - timedelta(days=14) 
+    
+    await update.message.reply_text(f"⏳ Generating Fortnightly Report ({start_date} to {today})...")
+    file_path = reports.generate_attendance_register(start_date, today)
+    
+    if file_path:
+        await context.bot.send_document(
+            chat_id=chat_id,
+            document=open(file_path, 'rb'),
+            caption=f"📅 Fortnightly Attendance Register\n({start_date} to {today})"
+        )
+        try: os.remove(file_path)
+        except: pass
+    else:
+        await update.message.reply_text("No data found for this period.")
+
+async def monthly_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    today = datetime.now().date()
+    start_date = today - timedelta(days=29) 
+    
+    await update.message.reply_text(f"⏳ Generating Monthly Report ({start_date} to {today})...")
+    file_path = reports.generate_attendance_register(start_date, today)
+    
+    if file_path:
+        await context.bot.send_document(
+            chat_id=chat_id,
+            document=open(file_path, 'rb'),
+            caption=f"📅 Monthly Attendance Register\n({start_date} to {today})"
+        )
+        try: os.remove(file_path)
+        except: pass
+    else:
+        await update.message.reply_text("No data found for this period.")
+
 def main():
     if not TOKEN:
         print("Error: TELEGRAM_BOT_TOKEN not found in .env file")
@@ -288,11 +343,15 @@ def main():
     # Handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("report", manual_report_handler))
+    application.add_handler(CommandHandler("weekly", weekly_report_handler))
+    application.add_handler(CommandHandler("fortnightly", fortnightly_report_handler))
+    application.add_handler(CommandHandler("monthly", monthly_report_handler))
     application.add_handler(CommandHandler("stock", stock_alert_handler))
     application.add_handler(CommandHandler("poll", manual_poll_handler))
     application.add_handler(CommandHandler("quiz", manual_quiz_handler))
     # Handles photos
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+    
     # Update group ID on any text message too
     async def update_group_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         global GROUP_CHAT_ID
